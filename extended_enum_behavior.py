@@ -1,32 +1,52 @@
 # extended_enum_behavior.py
 # CS 3350 - Programming Languages
 # Comparing Enums in Python vs Java
-# This file shows the Python side of things
 # 
-# We're looking at how Python enums can carry extra data with each
-# variant and what happens when you try to do weird stuff with them
-# (like using None as an enum variable, which is kinda like Java's null)
+# This file demonstrates three enum patterns:
+#   1. Shape enum - carrying associated data (tuples)
+#   2. Digit enum - simple value mapping with methods
+#   3. Null/uninitialized enum variable behavior
 
-from enum import Enum, unique, auto
+from enum import Enum, unique
 import traceback
 
 
-# ---- PART 1: Basic enum with associated data ----
-# In Python you can give each enum member a tuple as its value
-# and then unpack it in __init__ to store extra info
+# ---- PART 1: Shape enum with associated data ----
+# Each enum member stores a tuple that gets unpacked into attributes.
+#
+# JAVA COMPARISON:
+#   In Java, you'd write this with a constructor and final fields:
+#
+#   public enum Shape {
+#       CIRCLE("circle", Map.of("radius", 5.0)),
+#       RECTANGLE("rectangle", Map.of("width", 4.0, "height", 7.0)),
+#       TRIANGLE("triangle", Map.of("base", 3.0, "height", 5.0)),
+#       POINT("point", Map.of());
+#
+#       private final String label;
+#       private final Map<String, Double> dimensions;
+#
+#       Shape(String label, Map<String, Double> dimensions) {
+#           this.label = label;
+#           this.dimensions = dimensions;
+#       }
+#   }
+#
+# Key difference: Java fields are typically 'final', so you CAN'T
+# accidentally mutate them. Python has no such protection.
 
 class Shape(Enum):
-    CIRCLE    = ("circle", {"radius": 5.0})
+    CIRCLE    = ("circle",    {"radius": 5.0})
     RECTANGLE = ("rectangle", {"width": 4.0, "height": 7.0})
-    TRIANGLE  = ("triangle", {"base": 3.0, "height": 5.0})
-    POINT     = ("point", {})  # this one has no real data
+    TRIANGLE  = ("triangle",  {"base": 3.0, "height": 5.0})
+    POINT     = ("point",     {})  # no dimensions
 
     def __init__(self, label, dimensions):
         self.label = label
         self.dimensions = dimensions
 
     def area(self):
-        """calculate the area based on what shape it is"""
+        """calculate area based on the shape type"""
         import math
         if self.label == "circle":
             return math.pi * self.dimensions["radius"] ** 2
@@ -38,85 +58,66 @@ class Shape(Enum):
             return 0.0
 
 
-# ---- PART 2: Enum that also acts like a string ----
-# This is useful for stuff like HTTP status codes where you want
-# the enum to literally be usable as a string
+# ---- PART 2: Digit enum ----
+# Maps digit names to their integer values, with helper methods.
+#
+# JAVA COMPARISON:
+#   public enum Digit {
+#       ZERO(0), ONE(1), TWO(2), THREE(3), FOUR(4),
+#       FIVE(5), SIX(6), SEVEN(7), EIGHT(8), NINE(9);
+#
+#       private final int value;
+#
+#       Digit(int value) { this.value = value; }
+#       public int getValue() { return value; }
+#       public boolean isEven() { return value % 2 == 0; }
+#       public Digit complement() { return values()[9 - value]; }
+#   }
+#
+# Differences:
+#   - Java: the value is stored in a private final field, accessed via getter
+#   - Python: the value IS the enum's .value attribute directly
+#   - Java: complement() uses values()[index] to look up by ordinal
+#   - Python: we have to filter through the enum members manually
+#   - Java: enums have a built-in .ordinal() method
+#   - Python: no ordinal, but you can use list(Digit).index(member)
 
-class HttpStatus(str, Enum):
-    OK             = "OK"
-    NOT_FOUND      = "Not Found"
-    INTERNAL_ERROR = "Internal Server Error"
-    TEAPOT         = "I'm a teapot"
+@unique
+class Digit(Enum):
+    ZERO  = 0
+    ONE   = 1
+    TWO   = 2
+    THREE = 3
+    FOUR  = 4
+    FIVE  = 5
+    SIX   = 6
+    SEVEN = 7
+    EIGHT = 8
+    NINE  = 9
 
-    def __new__(cls, phrase):
-        obj = str.__new__(cls, phrase)
-        obj._value_ = phrase
-        return obj
+    def is_even(self):
+        """check if this digit is even"""
+        return self.value % 2 == 0
 
-    def __init__(self, phrase):
-        codes = {
-            "OK": (200, "success"),
-            "Not Found": (404, "client_error"),
-            "Internal Server Error": (500, "server_error"),
-            "I'm a teapot": (418, "easter_egg"),
-        }
-        self.code, self.severity = codes[phrase]
+    def complement(self):
+        """return the 9's complement (9 - digit)"""
+        complement_val = 9 - self.value
+        return Digit(complement_val)
 
-    def is_error(self):
-        return self.code >= 400
+    def to_word(self):
+        """return the English word for this digit"""
+        # in Java you'd probably store this as another field in the constructor
+        # like Digit(0, "zero") with a 'word' field
+        # Python lets us just use .name.lower() since the names ARE the words
+        return self.name.lower()
 
-
-# ---- PART 3: Tagged union pattern ----
-# Python enums can't do what Rust does natively where each variant
-# has different fields, but we can fake it with a wrapper class
-
-class Result(Enum):
-    SUCCESS = auto()
-    ERROR   = auto()
-    PENDING = auto()
-
-class ResultValue:
-    """pairs a Result tag with whatever data you want"""
-    def __init__(self, tag, **payload):
-        self.tag = tag
-        self.payload = payload
-
-    def __repr__(self):
-        items = ", ".join(f"{k}={v!r}" for k, v in self.payload.items())
-        return f"ResultValue({self.tag.name}, {items})"
-
-    def unwrap(self):
-        if self.tag is Result.ERROR:
-            raise RuntimeError(f"tried to unwrap an error: {self.payload.get('message', '?')}")
-        return self.payload
-
-
-# ---- PART 4: Log levels with per-member behavior ----
-# You can actually override methods on individual enum members
-# which is kinda cool
-
-class LogLevel(Enum):
-    DEBUG   = 10
-    INFO    = 20
-    WARNING = 30
-    ERROR   = 40
-
-    def format_message(self, msg):
-        return f"[{self.name}] {msg}"
-
-
-# monkey-patch specific members to have different formatting
-import types
-LogLevel.ERROR.format_message = types.MethodType(
-    lambda self, msg: f"[!] ERROR: {msg.upper()}", LogLevel.ERROR
-)
-LogLevel.WARNING.format_message = types.MethodType(
-    lambda self, msg: f"[*] WARN: {msg}", LogLevel.WARNING
-)
+    def is_prime(self):
+        """check if this digit is a prime number"""
+        return self.value in {2, 3, 5, 7}
 
 
 # ========================================
-#   HELPER - just prints section headers
+#   HELPER
 # ========================================
 def print_section(title):
     print(f"\n{'='*60}")
@@ -130,7 +131,7 @@ def print_section(title):
 def main():
 
     # --- 1. Shape enum demo ---
-    print_section("1. Shape Enum - Tuple-Based Data")
+    print_section("1. Shape Enum - Associated Data")
 
     for s in Shape:
         print(f"  {s.name:12s}  label={s.label!r:14s}  "
@@ -138,232 +139,225 @@ def main():
 
     print(f"\n  CIRCLE radius: {Shape.CIRCLE.dimensions['radius']}")
 
-    # you can look up a shape by its full tuple value
+    # lookup by full tuple value
     found = Shape(("circle", {"radius": 5.0}))
     print(f"  Lookup by value: {found} is CIRCLE? {found is Shape.CIRCLE}")
 
-    # --- 2. HTTP status demo ---
-    print_section("2. HttpStatus Enum - String Mixin")
+    # --- Shape edge cases ---
+    print_section("1b. Shape Edge Cases")
 
-    for status in HttpStatus:
-        print(f"  {status.name:20s}  code={status.code}  "
-              f"severity={status.severity:14s}  is_error={status.is_error()}")
-
-    # since it inherits from str, you can do string ops
-    print(f"\n  Upper-cased: {HttpStatus.TEAPOT.upper()}")
-    print(f"  Concatenation: {'Status: ' + HttpStatus.OK}")
-
-    # --- 3. Tagged union demo ---
-    print_section("3. Result + ResultValue - Tagged Union")
-
-    ok   = ResultValue(Result.SUCCESS, data=[1, 2, 3])
-    err  = ResultValue(Result.ERROR, message="disk full", code=28)
-    pend = ResultValue(Result.PENDING, eta_seconds=45)
-
-    for rv in (ok, err, pend):
-        print(f"  {rv}")
-
-    print(f"\n  Unwrap SUCCESS: {ok.unwrap()}")
-
-    # --- 4. LogLevel per-member overrides ---
-    print_section("4. LogLevel - Per-Member Method Overrides")
-
-    msg = "something went wrong"
-    for level in LogLevel:
-        print(f"  {level.format_message(msg)}")
-
-    # ============================================================
-    #   EDGE CASES AND WEIRD STUFF
-    # ============================================================
-    print_section("5. Edge Cases & Unexpected Usage")
-
-    # 5a. accessing a key that doesn't exist
-    print("\n  5a. Accessing missing dimension on POINT:")
+    # accessing a key that doesn't exist
+    print("\n  Accessing missing dimension on POINT:")
     try:
         _ = Shape.POINT.dimensions["radius"]
     except KeyError as e:
-        print(f"      KeyError: {e}  (POINT doesn't have 'radius')")
+        print(f"      KeyError: {e}  (POINT has no 'radius')")
+        # Java equivalent: map.get("radius") returns null,
+        # and unboxing null to double throws NullPointerException
 
-    # 5b. looking up a shape that doesn't exist
-    print("\n  5b. Looking up a non-existent Shape:")
-    try:
-        _ = Shape(("hexagon", {"sides": 6}))
-    except ValueError as e:
-        print(f"      ValueError: {e}")
-
-    # 5c. trying to add a new enum member at runtime
-    print("\n  5c. Adding a member at runtime:")
-    try:
-        Shape.PENTAGON = ("pentagon", {"sides": 5})
-        is_real = isinstance(Shape.PENTAGON, Shape)
-        print(f"      No exception but is it a real member? {is_real}")
-        if not is_real:
-            print("      Nope - it's just a plain attribute, not an enum member")
-        try:
-            del Shape.PENTAGON
-        except AttributeError:
-            pass
-    except AttributeError as e:
-        print(f"      AttributeError: {e}")
-
-    # 5d. trying to reassign an existing member
-    print("\n  5d. Reassigning Shape.CIRCLE:")
-    try:
-        Shape.CIRCLE = ("ellipse", {"a": 3, "b": 5})
-    except AttributeError as e:
-        print(f"      AttributeError: {e}")
-
-    # 5e. mutating mutable data inside an enum member
-    # THIS ACTUALLY WORKS which is kind of scary
-    print("\n  5e. Mutating the dict inside Shape.CIRCLE:")
+    # mutating mutable data inside an enum (this is dangerous!)
+    print("\n  Mutating the dict inside Shape.CIRCLE:")
     old_radius = Shape.CIRCLE.dimensions["radius"]
     Shape.CIRCLE.dimensions["radius"] = 999
     print(f"      radius was {old_radius}, now {Shape.CIRCLE.dimensions['radius']}")
     print("      Python lets you mutate mutable data inside enums!")
+    print("      In Java, if the field is 'final', this would be a compile error.")
     Shape.CIRCLE.dimensions["radius"] = old_radius  # put it back
 
-    # 5f. unwrapping an error result
-    print("\n  5f. Unwrapping an ERROR result:")
+    # trying to reassign an enum member
+    print("\n  Trying to reassign Shape.CIRCLE:")
     try:
-        err.unwrap()
-    except RuntimeError as e:
-        print(f"      RuntimeError: {e}")
+        Shape.CIRCLE = ("ellipse", {"a": 3, "b": 5})
+    except AttributeError as e:
+        print(f"      AttributeError: {e}")
+        print("      Same in Java - enum constants can't be reassigned")
 
-    # 5g. duplicate values with @unique
-    print("\n  5g. Duplicate values with @unique:")
-    try:
-        @unique
-        class Color(Enum):
-            RED  = 1
-            RUBY = 1  # same value as RED
-    except ValueError as e:
-        print(f"      ValueError: {e}")
+    # --- 2. Digit enum demo ---
+    print_section("2. Digit Enum")
 
-    # 5h. comparing enums from different classes
-    print("\n  5h. Cross-enum comparison:")
-    result = Shape.CIRCLE == HttpStatus.OK
-    print(f"      Shape.CIRCLE == HttpStatus.OK -> {result}  (always False)")
+    print("  All digits:")
+    for d in Digit:
+        comp = d.complement()
+        print(f"    {d.to_word():>5s} ({d.value})  "
+              f"even={str(d.is_even()):>5s}  "
+              f"prime={str(d.is_prime()):>5s}  "
+              f"9s complement={comp.to_word()} ({comp.value})")
 
-    # 5i. enum members as dict keys
-    print("\n  5i. Enum members as dictionary keys:")
-    costs = {Shape.CIRCLE: 9.99, Shape.RECTANGLE: 14.50}
-    print(f"      costs[Shape.CIRCLE] = {costs[Shape.CIRCLE]}")
+    # --- Digit-specific features ---
+    print_section("2b. Digit Features & Java Comparison")
 
-    # 5j. identity vs equality
-    print("\n  5j. Identity (is) vs equality (==):")
-    a = Shape.CIRCLE
-    b = Shape(("circle", {"radius": 5.0}))
-    print(f"      a == b: {a == b}")
-    print(f"      a is b: {a is b}  (singletons!)")
+    # lookup by value (Python) vs valueOf by name (Java)
+    print("\n  Lookup by integer value:")
+    d = Digit(7)
+    print(f"      Digit(7) = {d.name}")
+    print("      Java equivalent: no direct equivalent!")
+    print("      Java's valueOf() only works with strings: Digit.valueOf(\"SEVEN\")")
+    print("      To lookup by int in Java you'd need a custom static method")
+
+    # lookup by name
+    print("\n  Lookup by name:")
+    d2 = Digit["THREE"]
+    print(f"      Digit['THREE'] = {d2.name} (value={d2.value})")
+    print("      Java equivalent: Digit.valueOf(\"THREE\")")
+
+    # iteration comparison
+    print("\n  Iteration:")
+    names = [d.name for d in Digit]
+    print(f"      Python: for d in Digit -> {names[:4]}...")
+    print("      Java:   for (Digit d : Digit.values()) -> same thing")
+    print("      Python iteration is simpler syntax-wise")
+
+    # ordinal comparison
+    print("\n  Ordinal / Index:")
+    idx = list(Digit).index(Digit.FIVE)
+    print(f"      Python: list(Digit).index(Digit.FIVE) = {idx}")
+    print("      Java:   Digit.FIVE.ordinal() = 5")
+    print("      Java has built-in ordinal(), Python needs a workaround")
+
+    # identity check
+    print("\n  Identity (singleton check):")
+    a = Digit(3)
+    b = Digit.THREE
+    print(f"      Digit(3) is Digit.THREE -> {a is b}")
+    print("      Both Python and Java enums are singletons")
+    print("      Java: Digit.THREE == Digit.valueOf(\"THREE\") -> true (same object)")
+
+    # using enums in arithmetic (Python allows it, Java doesn't directly)
+    print("\n  Using enum .value in arithmetic:")
+    result = Digit.THREE.value + Digit.FOUR.value
+    print(f"      Digit.THREE.value + Digit.FOUR.value = {result}")
+    print("      Python: works directly with .value")
+    print("      Java: Digit.THREE.getValue() + Digit.FOUR.getValue()")
+    print("      Both need explicit access to the underlying int")
 
     # ============================================================
     #   *** NULL / UNINITIALIZED ENUM VARIABLE ***
-    #   This is the big one for our Java vs Python comparison.
-    #   In Java, an uninitialized enum variable is null and calling
-    #   a method on it throws NullPointerException.
-    #   In Python, the closest equivalent is setting a variable to
-    #   None and then trying to use it like an enum.
+    #   In Java, an uninitialized enum variable is null.
+    #   Calling any method on it throws NullPointerException.
+    #   In Python, the closest thing is setting a variable to None.
     # ============================================================
-    print_section("6. Null / Uninitialized Enum Variable")
+    print_section("3. Null / Uninitialized Enum Variable")
 
-    # 6a. set an enum variable to None (Python's version of null)
-    print("\n  6a. Setting an enum variable to None and calling .name:")
-    my_shape = None  # like an uninitialized enum in Java
+    # 3a. None as a Shape
+    print("\n  3a. Setting a Shape variable to None and calling .name:")
+    my_shape = None  # like Shape myShape = null; in Java
     try:
         print(f"      my_shape.name = {my_shape.name}")
     except AttributeError as e:
         print(f"      AttributeError: {e}")
-        print("      In Java this would be a NullPointerException!")
+        print("      Java: NullPointerException: Cannot invoke \"Shape.name()\"")
 
-    # 6b. try to call a method on the None variable
-    print("\n  6b. Calling .area() on a None variable:")
+    # 3b. calling a method on None
+    print("\n  3b. Calling .area() on a None variable:")
     try:
         print(f"      my_shape.area() = {my_shape.area()}")
     except AttributeError as e:
         print(f"      AttributeError: {e}")
-        print("      Same thing - Python says 'NoneType' has no attribute 'area'")
+        print("      Java: NullPointerException")
 
-    # 6c. try to access associated data on None
-    print("\n  6c. Accessing .dimensions on a None variable:")
+    # 3c. accessing associated data on None
+    print("\n  3c. Accessing .dimensions on None:")
     try:
         print(f"      my_shape.dimensions = {my_shape.dimensions}")
     except AttributeError as e:
         print(f"      AttributeError: {e}")
 
-    # 6d. try to use None in a match/if statement meant for enums
-    print("\n  6d. Using None in comparisons meant for enums:")
-    my_status = None
-    if my_status == HttpStatus.OK:
-        print("      Status is OK")
-    elif my_status is None:
-        print("      Status is None! No crash, but no useful data either")
-        print("      Java would crash here if you called .code on null")
-
-    # 6e. passing None to a function that expects an enum
-    print("\n  6e. Passing None where an enum is expected:")
-    def get_status_code(status):
-        """this function assumes it gets an HttpStatus"""
-        return status.code  # will blow up if status is None
+    # 3d. None Digit - trying to call methods
+    print("\n  3d. Setting a Digit variable to None and calling .is_even():")
+    my_digit = None  # like Digit myDigit = null; in Java
     try:
-        code = get_status_code(None)
+        print(f"      my_digit.is_even() = {my_digit.is_even()}")
     except AttributeError as e:
         print(f"      AttributeError: {e}")
-        print("      Python doesn't have type enforcement at runtime for this")
-
-    # 6f. putting None into a list of enum values and iterating
-    print("\n  6f. None mixed into a list of enum values:")
-    shapes_list = [Shape.CIRCLE, None, Shape.TRIANGLE]
-    for i, s in enumerate(shapes_list):
-        try:
-            print(f"      shapes_list[{i}]: area = {s.area():.4f}")
-        except AttributeError:
-            print(f"      shapes_list[{i}]: AttributeError - it's None!")
-
-    # 6g. type checking None against the enum type
-    print("\n  6g. isinstance check with None:")
-    print(f"      isinstance(Shape.CIRCLE, Shape) = {isinstance(Shape.CIRCLE, Shape)}")
-    print(f"      isinstance(None, Shape)         = {isinstance(None, Shape)}")
-    print("      Unlike Java, Python's isinstance gives False instead of crashing")
-
-    # 6h. storing None as a default and forgetting to initialize
-    print("\n  6h. Simulating 'forgot to initialize' pattern:")
-
-    class Config:
-        """imagine this is some config class where you forgot to set the log level"""
-        def __init__(self):
-            self.log_level = None  # oops, forgot to set this to a real LogLevel
-
-    config = Config()
-    try:
-        formatted = config.log_level.format_message("hello")
-    except AttributeError as e:
-        print(f"      AttributeError: {e}")
-        print("      This is exactly what happens in Java with null enums!")
         print("      Java: NullPointerException")
+
+    # 3e. trying complement on None
+    print("\n  3e. Calling .complement() on a None Digit:")
+    try:
+        print(f"      my_digit.complement() = {my_digit.complement()}")
+    except AttributeError as e:
+        print(f"      AttributeError: {e}")
+
+    # 3f. None in comparisons
+    print("\n  3f. Comparing None to an actual enum value:")
+    my_shape = None
+    if my_shape == Shape.CIRCLE:
+        print("      It's a circle")
+    elif my_shape is None:
+        print("      my_shape is None - no crash on comparison!")
+        print("      Java: myShape == Shape.CIRCLE works too (no NPE)")
+        print("      But myShape.equals(Shape.CIRCLE) WOULD throw NPE!")
+
+    # 3g. isinstance check
+    print("\n  3g. isinstance check with None:")
+    print(f"      isinstance(Shape.CIRCLE, Shape)  = {isinstance(Shape.CIRCLE, Shape)}")
+    print(f"      isinstance(None, Shape)           = {isinstance(None, Shape)}")
+    print(f"      isinstance(Digit.FIVE, Digit)     = {isinstance(Digit.FIVE, Digit)}")
+    print(f"      isinstance(None, Digit)            = {isinstance(None, Digit)}")
+    print("      Java: (null instanceof Shape) -> false (no crash)")
+
+    # 3h. passing None to a function expecting an enum
+    print("\n  3h. Passing None to a function that expects an enum:")
+    def describe_shape(s):
+        return f"{s.label} with area {s.area():.2f}"
+    try:
+        print(f"      {describe_shape(None)}")
+    except AttributeError as e:
+        print(f"      AttributeError: {e}")
+        print("      Python has no compile-time check for this!")
+        print("      Java would catch Shape s = null at compile time")
+        print("      if you used @NonNull annotation")
+
+    # 3i. None in a list of enums
+    print("\n  3i. None mixed into a list of enum values:")
+    digits_list = [Digit.ONE, None, Digit.THREE]
+    for i, d in enumerate(digits_list):
+        try:
+            print(f"      digits_list[{i}]: {d.to_word()} is_prime={d.is_prime()}")
+        except AttributeError:
+            print(f"      digits_list[{i}]: AttributeError - it's None!")
+
+    # 3j. the "forgot to initialize" pattern
+    print("\n  3j. Simulating 'forgot to initialize' pattern:")
+
+    class Calculator:
+        def __init__(self):
+            self.base = None  # oops, should be a Digit
+
+    calc = Calculator()
+    try:
+        result = calc.base.complement()
+    except AttributeError as e:
+        print(f"      AttributeError: {e}")
+        print("      This is the classic uninitialized-enum bug!")
+        print("      Java:  NullPointerException")
         print("      Python: AttributeError on NoneType")
 
     # --- summary ---
     print_section("Summary")
     print("""
-  KEY FINDINGS FOR JAVA VS PYTHON ENUM COMPARISON:
+  PYTHON vs JAVA ENUM COMPARISON:
 
-  1. Python doesn't really have "null" enums the way Java does.
-     You can set a variable to None, but Python won't stop you.
-     Java at least has the type system to warn you (with Optional, etc.)
+  Shape Enum (associated data):
+    - Python: tuple values + __init__ unpacking
+    - Java:   constructor params + final fields
+    - Java is safer (final prevents mutation)
+    - Python is more flexible (any data type, mutable)
 
-  2. When you DO access stuff on None in Python you get AttributeError,
-     which is basically Python's equivalent of Java's NullPointerException.
+  Digit Enum (simple values with methods):
+    - Python: value IS the int, methods access self.value
+    - Java:   int stored in private field, accessed via getter
+    - Python has value-based lookup: Digit(7)
+    - Java only has name-based lookup: Digit.valueOf("SEVEN")
+    - Java has built-in .ordinal(), Python doesn't
 
-  3. Python enums can carry associated data through tuples and __init__,
-     while Java enums have actual fields and constructors (more structured).
-
-  4. Python allows mutable data inside enum members (kinda dangerous).
-     Java enum fields can be final, preventing this.
-
-  5. Both languages prevent adding new enum members at runtime.
-
-  6. Neither language has great built-in exhaustiveness checking for
-     enum switches/matches (though Java 17+ sealed classes help).
+  Null / Uninitialized Enums:
+    - Python None -> AttributeError on any attribute access
+    - Java null  -> NullPointerException on any method call
+    - Both crash at RUNTIME, not compile time
+    - Java can use @NonNull annotations for compile-time warnings
+    - Python can use mypy type hints for static analysis
+    - Neither language fully prevents the null-enum problem
 """)
 
 
