@@ -54,6 +54,21 @@ public class MAIN{
         // int one = (int)DIGIT.ONE;Cannot be converted to int (Stringly typed)
         //Equality test
         // System.out.print(DIGIT.ONE == 1); Bad operand types error
+        DIGIT dig1 = DIGIT.ONE;
+        DIGIT dig2 = DIGIT.ONE;
+        DIGIT two = DIGIT.TWO;
+        if(dig1 == dig2){
+            print("\'==\'can be used to compare enum instances");
+        }
+        /*Enum in java cannot be compared using comparison operators.
+        if(dig1 < two){
+            print("1 < 2");
+        }
+        */
+        //Comparison even though enum instances cannot be compared using <, >, <=, >= they implement Comparable interface which allows them to use thier ordinal value(order they were declared and initialized) to determine their value.
+        if(dig1.compareTo(two) < 0){
+            print("1 < 2");
+        }
 
         //Mutability
         // DIGIT.ONE = 10; incompatible types
