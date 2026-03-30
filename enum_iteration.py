@@ -1,7 +1,7 @@
 from enum import Enum
 
 #enum_iteration.py
-# CS 3350 - Programming Languages
+# CS 316 - Programming Languages
 #simple iteration through an enum
 
 #define a simple enum
