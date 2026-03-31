@@ -147,9 +147,8 @@ python extended_enum_behavior.py
 
 ## AI Usage
 
--Elaborate on differences and similarities between the enums in Java and Python
--Gather useful source material from the web
--Intellisense Autocomplete code
--Work arounds and fixes for exceptions and errors
--Provide examples and discription odf real world problems that class type enum was a helpful fix to
-
+- Elaborate on differences and similarities between the enums in Java and Python
+- Gather useful source material from the web
+- Intellisense autocomplete code
+- Workarounds and fixes for exceptions and errors
+- Provide examples and descriptions of real-world problems where class-type enums were a helpful fix.
