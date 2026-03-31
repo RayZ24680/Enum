@@ -1,4 +1,4 @@
-public class Pragram5{
+public class Program5{
   public static void main(String[] args){
     ACCESSTYPE a = ACCESSTYPE.READ;
     ACCESSTYPE b = ACCESSTYPE.READ_WRITE;
