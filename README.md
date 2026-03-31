@@ -146,9 +146,10 @@ python extended_enum_behavior.py
 | Associated data | Constructor + private final fields | Tuple + `__init__` |
 
 ## AI Usage
-
-Elaborate on differences and similarities between the enums in Java and Python
-Gather useful source material from the web
-Intellisense Autocomplete code
-Work arounds and fixes for exceptions and errors
-Provide examples and discription odf real world problems that class type enum was a helpful fix to
+---
+-Elaborate on differences and similarities between the enums in Java and Python
+-Gather useful source material from the web
+-Intellisense Autocomplete code
+-Work arounds and fixes for exceptions and errors
+-Provide examples and discription odf real world problems that class type enum was a helpful fix to
+---
